@@ -177,7 +177,6 @@ def update_status(item_id, new_status):
     conn.close()
 
 
-# دالة الأرشفة وإنشاء ملفات PDF و TXT
 def archive_item_with_files(item_id):
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
@@ -188,15 +187,12 @@ def archive_item_with_files(item_id):
         conn.close()
         return False, "ID non trouvé"
 
-    # تحديث الحالة فـ قاعدة البيانات
     c.execute("UPDATE titres SET archive = 1 WHERE id = ?", (item_id,))
     conn.commit()
     conn.close()
 
-    # إنشاء مجلد الأرشيف محلياً
     os.makedirs("archives_exports", exist_ok=True)
 
-    # 1. إنشاء ملف TXT
     txt_filename = f"archives_exports/archive_titre_{item_id}.txt"
     txt_content = f"""========================================
 FICHE D'ARCHIVE TITRE N° {item_id}
@@ -216,7 +212,6 @@ Statut Final     : {item[9]}
     with open(txt_filename, "w", encoding="utf-8") as f:
         f.write(txt_content)
 
-    # 2. إنشاء ملف PDF
     pdf_filename = f"archives_exports/archive_titre_{item_id}.pdf"
     doc = SimpleDocTemplate(pdf_filename, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -250,12 +245,7 @@ Statut Final     : {item[9]}
     t.setStyle(
         TableStyle(
             [
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor("#1e293b"),
-                ),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e293b")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("GRID", (0, 0), (-1, -1), 1, colors.grey),
@@ -319,7 +309,7 @@ if not st.session_state["authenticated"]:
                     st.error("Identifiants incorrects / Invalid credentials")
     st.stop()
 
-# Translations
+# Translations & Navigation
 TEXTS = {
     "Français": {
         "title": "📊 Plateforme de Gestion des Chèques & Effets",
@@ -328,6 +318,7 @@ TEXTS = {
         "menu_remise": "Bordereau de Remise",
         "menu_impayes": "Suivi des Impayés",
         "menu_archive": "Archives",
+        "menu_backup": "Sauvegarde & Backup",
         "total_portefeuille": "En Portefeuille",
         "total_remis": "Remis en Banque",
         "total_paye": "Payés / Encaissés",
@@ -344,7 +335,7 @@ TEXTS = {
         "status": "Statut",
         "save_btn": "Enregistrer le Titre",
         "update_btn": "Mettre à jour",
-        "archive_btn": "Archiver & Exporter (PDF/TXT)",
+        "archive_btn": "Archiver & Exporter",
         "search_label": "Rechercher (Référence ou Client)",
         "filter_bank": "Filtrer par Banque",
         "filter_status": "Filtrer par Statut",
@@ -357,7 +348,6 @@ TEXTS = {
     },
 }
 
-# Sidebar Navigation
 st.sidebar.title("⚙️ Navigation")
 st.sidebar.write(
     f"👤 Connecté en tant que: **{st.session_state['current_user']}**"
@@ -372,6 +362,7 @@ menu = st.sidebar.radio(
         t["menu_remise"],
         t["menu_impayes"],
         t["menu_archive"],
+        t["menu_backup"],
     ],
 )
 
@@ -394,10 +385,9 @@ st.markdown("---")
 
 df = load_data()
 
-# Dashboard
+# 1. Dashboard
 if menu == t["menu_dash"]:
     st.subheader(t["menu_dash"])
-
     c1, c2, c3, c4 = st.columns(4)
     v_portefeuille = (
         df[df["statut"] == "En portefeuille"]["montant"].sum()
@@ -420,7 +410,6 @@ if menu == t["menu_dash"]:
     c4.metric(t["total_impaye"], f"{v_impaye:,.2f} DH")
 
     st.markdown("<br>", unsafe_allow_html=True)
-
     st.subheader(t["alerts_title"])
     if not df.empty:
         df["echeance_dt"] = pd.to_datetime(df["echeance"])
@@ -456,10 +445,9 @@ if menu == t["menu_dash"]:
     else:
         st.info(t["no_data"])
 
-# Saisie & Modification
+# 2. Saisie & Modification
 elif menu == t["menu_saisie"]:
     st.subheader(t["menu_saisie"])
-
     with st.expander("➕ Ajouter un nouveau titre", expanded=True):
         with st.form("entry_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -576,10 +564,9 @@ elif menu == t["menu_saisie"]:
     else:
         st.info(t["no_data"])
 
-# Bordereau de Remise
+# 3. Bordereau de Remise
 elif menu == t["menu_remise"]:
     st.subheader(t["menu_remise"])
-
     if df.empty:
         st.info("Aucun titre disponible dans la base de données.")
     else:
@@ -715,7 +702,7 @@ elif menu == t["menu_remise"]:
                         use_container_width=True,
                     )
 
-# Suivi des Impayés
+# 4. Suivi des Impayés
 elif menu == t["menu_impayes"]:
     st.subheader(t["menu_impayes"])
     df_impayes = df[df["statut"] == "Impayé"]
@@ -730,7 +717,7 @@ elif menu == t["menu_impayes"]:
             value=f"{df_impayes['montant'].sum():,.2f} DH",
         )
 
-# Archives
+# 5. Archives
 elif menu == t["menu_archive"]:
     st.subheader(t["menu_archive"])
     df_archived = load_data(include_archived=True)
@@ -774,3 +761,38 @@ elif menu == t["menu_archive"]:
                             mime="text/plain",
                             key=f"dl_txt_{item_id}",
                         )
+
+# 6. Sauvegarde & Backup (جديد)
+elif menu == t["menu_backup"]:
+    st.subheader("💾 Sauvegarde & Restauration des données")
+    st.info(
+        "Utilisez cette section pour sauvegarder ou restaurer vos données à tout moment."
+    )
+
+    col_b1, col_b2 = st.columns(2)
+
+    with col_b1:
+        st.markdown("### 📥 Télécharger une copie (Backup)")
+        if os.path.exists("data_gestion.db"):
+            with open("data_gestion.db", "rb") as db_file:
+                st.download_button(
+                    label="Télécharger le fichier Database (data_gestion.db)",
+                    data=db_file,
+                    file_name=f"backup_data_{datetime.date.today()}.db",
+                    mime="application/x-sqlite3",
+                    use_container_width=True,
+                )
+
+    with col_b2:
+        st.markdown("### 📤 Importer une sauvegarde (Restore)")
+        uploaded_db = st.file_uploader(
+            "Importer un fichier .db", type=["db", "sqlite"]
+        )
+        if uploaded_db is not None:
+            if st.button("Restaurer les données", use_container_width=True):
+                with open("data_gestion.db", "wb") as f:
+                    f.write(uploaded_db.getbuffer())
+                st.success(
+                    "Base de données restaurée avec succès ! Rafraîchissez la page."
+                )
+                st.rerun()
