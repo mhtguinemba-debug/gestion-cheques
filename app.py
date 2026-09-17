@@ -16,35 +16,29 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 2. Custom CSS (تم تحديثه لإخفاء زر Gérer l'application نهائياً)
+# 2. Injection CSS القوي لمنع الظهور والاختفاء (Flicker)
 st.markdown(
     """
 <style>
-    /* Hide Streamlit Header & Toolbar */
-    header[data-testid="stHeader"] {
+    /* Force hide header, toolbar, status widgets, and manage app buttons */
+    header[data-testid="stHeader"],
+    footer,
+    #MainMenu,
+    .stAppToolbar,
+    div[data-testid="stStatusWidget"],
+    button[title="Manage app"],
+    div[data-testid="stActionButton"] {
         display: none !important;
         visibility: hidden !important;
+        height: 0px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
-    
-    #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
-    
-    /* Hide Manage App / Gérer l'application Button and Status Elements */
-    div[data-testid="stStatusWidget"] {
-        display: none !important;
-        visibility: hidden !important;
+
+    .block-container {
+        padding-top: 2rem !important;
     }
-    .stAppToolbar {
-        display: none !important;
-    }
-    [data-testid="stAppViewBlockContainer"] > div:nth-child(1) {
-        padding-top: 0rem;
-    }
-    button[title="Manage app"] {
-        display: none !important;
-    }
-    
-    /* Existing Styles */
+
     .main { background-color: #f8f9fa; }
     div[data-testid="stMetric"] {
         background-color: #ffffff;
@@ -98,7 +92,7 @@ def init_db():
     """
     )
 
-    # Automatic Migration: Check for missing columns in existing database
+    # Automatic Migration
     c.execute("PRAGMA table_info(titres)")
     columns = [column[1] for column in c.fetchall()]
 
@@ -119,7 +113,6 @@ def init_db():
     """
     )
 
-    # Default users creation
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
         c.executemany(
@@ -244,9 +237,7 @@ if not st.session_state["authenticated"]:
                     st.error("Identifiants incorrects / Invalid credentials")
     st.stop()
 
-# ----------------------------------------------------
-# Translations (French / English)
-# ----------------------------------------------------
+# Translations
 TEXTS = {
     "Français": {
         "title": "📊 Plateforme de Gestion des Chèques & Effets",
@@ -337,7 +328,6 @@ menu = st.sidebar.radio(
     ],
 )
 
-# Password Change Modal in Sidebar
 with st.sidebar.expander(f"🔑 {t['change_pwd']}"):
     with st.form("pwd_form"):
         new_pwd = st.text_input("Nouveau mot de passe", type="password")
@@ -357,9 +347,7 @@ st.markdown("---")
 
 df = load_data()
 
-# ----------------------------------------------------
 # 1. Dashboard
-# ----------------------------------------------------
 if menu == t["menu_dash"]:
     st.subheader(t["menu_dash"])
 
@@ -421,9 +409,7 @@ if menu == t["menu_dash"]:
     else:
         st.info(t["no_data"])
 
-# ----------------------------------------------------
 # 2. Saisie & Modification
-# ----------------------------------------------------
 elif menu == t["menu_saisie"]:
     st.subheader(t["menu_saisie"])
 
@@ -536,9 +522,7 @@ elif menu == t["menu_saisie"]:
     else:
         st.info(t["no_data"])
 
-# ----------------------------------------------------
-# 3. Bordereau de Remise (PDF & Excel)
-# ----------------------------------------------------
+# 3. Bordereau de Remise
 elif menu == t["menu_remise"]:
     st.subheader(t["menu_remise"])
 
@@ -558,7 +542,7 @@ elif menu == t["menu_remise"]:
 
         if df_display.empty:
             st.warning(
-                f"Aucun titre trouvé avec le statut '{status_filter}'. Vérifiez la Saisie ou changez le filtre."
+                f"Aucun titre trouvé avec le statut '{status_filter}'."
             )
         else:
             st.write("Sélectionnez les titres à inclure dans le bordereau:")
@@ -677,9 +661,7 @@ elif menu == t["menu_remise"]:
                         use_container_width=True,
                     )
 
-# ----------------------------------------------------
 # 4. Suivi des Impayés
-# ----------------------------------------------------
 elif menu == t["menu_impayes"]:
     st.subheader(t["menu_impayes"])
     df_impayes = df[df["statut"] == "Impayé"]
@@ -694,9 +676,7 @@ elif menu == t["menu_impayes"]:
             value=f"{df_impayes['montant'].sum():,.2f} DH",
         )
 
-# ----------------------------------------------------
 # 5. Archives
-# ----------------------------------------------------
 elif menu == t["menu_archive"]:
     st.subheader(t["menu_archive"])
     df_archived = load_data(include_archived=True)
