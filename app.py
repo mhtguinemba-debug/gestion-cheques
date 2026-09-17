@@ -1,3 +1,4 @@
+
 import datetime
 import io
 import sqlite3
@@ -16,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 2. Custom CSS (تم تعديله لإخفاء الشريط العلوي وزر Gérer l'application)
+# 2. Custom CSS (إخفاء الشريط العلوي وزر Gérer l'application)
 st.markdown(
     """
 <style>
@@ -535,123 +536,142 @@ elif menu == t["menu_saisie"]:
 # ----------------------------------------------------
 elif menu == t["menu_remise"]:
     st.subheader(t["menu_remise"])
-    df_portefeuille = df[df["statut"] == "En portefeuille"]
 
-    if df_portefeuille.empty:
-        st.info(t["no_data"])
+    if df.empty:
+        st.info("Aucun titre disponible dans la base de données.")
     else:
-        selected_ids = []
-        for idx, row in df_portefeuille.iterrows():
-            if st.checkbox(
-                f"ID: {row['id']} | {row['societe']} | {row['type']} N° {row['reference']} | {row['client']} | {row['montant']} DH | Banque: {row['banque']} (RIB: {row['rib']})",
-                key=f"chk_{row['id']}",
-            ):
-                selected_ids.append(row["id"])
+        # Filter status selection to easily find any title
+        status_filter = st.selectbox(
+            "Filtrer par Statut / Filter by Status",
+            ["Tous / All", "En portefeuille", "Remis à la banque", "Payé"],
+            index=1,  # Default to En portefeuille
+        )
 
-        if selected_ids:
-            remise_df = df_portefeuille[
-                df_portefeuille["id"].isin(selected_ids)
-            ]
-            st.dataframe(remise_df, use_container_width=True)
+        if status_filter != "Tous / All":
+            df_display = df[df["statut"] == status_filter]
+        else:
+            df_display = df.copy()
 
-            col1, col2 = st.columns(2)
-            with col1:
-                buffer_excel = io.BytesIO()
-                with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
-                    remise_df.to_excel(
-                        writer, index=False, sheet_name="Bordereau"
-                    )
-                st.download_button(
-                    label=f"📥 {t['export_excel']}",
-                    data=buffer_excel.getvalue(),
-                    file_name="Bordereau.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+        if df_display.empty:
+            st.warning(
+                f"Aucun titre trouvé avec le statut '{status_filter}'. Vérifiez la Saisie ou changez le filtre."
+            )
+        else:
+            st.write("Sélectionnez les titres à inclure dans le bordereau:")
+            selected_ids = []
+            for idx, row in df_display.iterrows():
+                if st.checkbox(
+                    f"ID: {row['id']} | {row['societe']} | {row['type']} N° {row['reference']} | {row['client']} | {row['montant']} DH | Banque: {row['banque']} (RIB: {row['rib']}) | Statut: {row['statut']}",
+                    key=f"chk_{row['id']}",
+                ):
+                    selected_ids.append(row["id"])
 
-            with col2:
+            if selected_ids:
+                remise_df = df_display[df_display["id"].isin(selected_ids)]
+                st.dataframe(remise_df, use_container_width=True)
 
-                def generate_pdf(data):
-                    pdf_buffer = io.BytesIO()
-                    doc = SimpleDocTemplate(pdf_buffer, pagesize=A4)
-                    elements = []
-                    styles = getSampleStyleSheet()
-
-                    first_row = data.iloc[0]
-                    societe_name = str(first_row.get("societe", "Société"))
-                    bank_name = str(first_row.get("banque", "Banque"))
-                    rib_num = str(first_row.get("rib", "-"))
-
-                    elements.append(
-                        Paragraph(
-                            "<b>BORDEREAU DE REMISE DE CHEQUES / EFFETS</b>",
-                            styles["Title"],
+                col1, col2 = st.columns(2)
+                with col1:
+                    buffer_excel = io.BytesIO()
+                    with pd.ExcelWriter(
+                        buffer_excel, engine="openpyxl"
+                    ) as writer:
+                        remise_df.to_excel(
+                            writer, index=False, sheet_name="Bordereau"
                         )
+                    st.download_button(
+                        label=f"📥 {t['export_excel']}",
+                        data=buffer_excel.getvalue(),
+                        file_name="Bordereau.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
                     )
-                    elements.append(Spacer(1, 10))
-                    elements.append(
-                        Paragraph(
-                            f"<b>Société:</b> {societe_name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Banque:</b> {bank_name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>RIB:</b> {rib_num}",
-                            styles["Normal"],
-                        )
-                    )
-                    elements.append(Spacer(1, 15))
 
-                    table_data = [
-                        [
-                            "Type",
-                            "Référence",
-                            "Client",
-                            "Montant (DH)",
-                            "Échéance",
+                with col2:
+
+                    def generate_pdf(data):
+                        pdf_buffer = io.BytesIO()
+                        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4)
+                        elements = []
+                        styles = getSampleStyleSheet()
+
+                        first_row = data.iloc[0]
+                        societe_name = str(first_row.get("societe", "Société"))
+                        bank_name = str(first_row.get("banque", "Banque"))
+                        rib_num = str(first_row.get("rib", "-"))
+
+                        elements.append(
+                            Paragraph(
+                                "<b>BORDEREAU DE REMISE DE CHEQUES / EFFETS</b>",
+                                styles["Title"],
+                            )
+                        )
+                        elements.append(Spacer(1, 10))
+                        elements.append(
+                            Paragraph(
+                                f"<b>Société:</b> {societe_name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Banque:</b> {bank_name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>RIB:</b> {rib_num}",
+                                styles["Normal"],
+                            )
+                        )
+                        elements.append(Spacer(1, 15))
+
+                        table_data = [
+                            [
+                                "Type",
+                                "Référence",
+                                "Client",
+                                "Montant (DH)",
+                                "Échéance",
+                            ]
                         ]
-                    ]
-                    total = 0
-                    for _, r in data.iterrows():
+                        total = 0
+                        for _, r in data.iterrows():
+                            table_data.append(
+                                [
+                                    str(r["type"]),
+                                    str(r["reference"]),
+                                    str(r["client"]),
+                                    f"{r['montant']:.2f}",
+                                    str(r["echeance"]),
+                                ]
+                            )
+                            total += float(r["montant"])
                         table_data.append(
-                            [
-                                str(r["type"]),
-                                str(r["reference"]),
-                                str(r["client"]),
-                                f"{r['montant']:.2f}",
-                                str(r["echeance"]),
-                            ]
+                            ["TOTAL", "", "", f"{total:.2f} DH", ""]
                         )
-                        total += float(r["montant"])
-                    table_data.append(["TOTAL", "", "", f"{total:.2f} DH", ""])
 
-                    pdf_table = Table(table_data)
-                    pdf_table.setStyle(
-                        TableStyle(
-                            [
-                                (
-                                    "BACKGROUND",
-                                    (0, 0),
-                                    (-1, 0),
-                                    colors.HexColor("#1e3d59"),
-                                ),
-                                (
-                                    "TEXTCOLOR",
-                                    (0, 0),
-                                    (-1, 0),
-                                    colors.whitesmoke,
-                                ),
-                                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                                ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-                            ]
+                        pdf_table = Table(table_data)
+                        pdf_table.setStyle(
+                            TableStyle(
+                                [
+                                    (
+                                        "BACKGROUND",
+                                        (0, 0),
+                                        (-1, 0),
+                                        colors.HexColor("#1e3d59"),
+                                    ),
+                                    (
+                                        "TEXTCOLOR",
+                                        (0, 0),
+                                        (-1, 0),
+                                        colors.whitesmoke,
+                                    ),
+                                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                                    ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+                                ]
+                            )
                         )
+                        elements.append(pdf_table)
+                        doc.build(elements)
+                        return pdf_buffer.getvalue()
+
+                    st.download_button(
+                        label=f"📄 {t['export_pdf']}",
+                        data=generate_pdf(remise_df),
+                        file_name="Bordereau_Remise.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
                     )
-                    elements.append(pdf_table)
-                    doc.build(elements)
-                    return pdf_buffer.getvalue()
-
-                st.download_button(
-                    label=f"📄 {t['export_pdf']}",
-                    data=generate_pdf(remise_df),
-                    file_name="Bordereau_Remise.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
 
 # ----------------------------------------------------
 # 4. Suivi des Impayés
