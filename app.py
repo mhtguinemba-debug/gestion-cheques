@@ -16,11 +16,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 2. Injection CSS القوي لمنع الظهور والاختفاء (Flicker)
+# 2. Injection CSS
 st.markdown(
     """
 <style>
-    /* Force hide header, toolbar, status widgets, and manage app buttons */
+    /* Absolute Hide for Header, Toolbar, Footer, Status Widgets */
     header[data-testid="stHeader"],
     footer,
     #MainMenu,
@@ -68,12 +68,11 @@ st.markdown(
 )
 
 
-# 3. Database Setup & Automatic Migration
+# 3. Database Setup
 def init_db():
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
 
-    # Table Titres
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS titres (
@@ -92,7 +91,6 @@ def init_db():
     """
     )
 
-    # Automatic Migration
     c.execute("PRAGMA table_info(titres)")
     columns = [column[1] for column in c.fetchall()]
 
@@ -103,7 +101,6 @@ def init_db():
     if "archive" not in columns:
         c.execute("ALTER TABLE titres ADD COLUMN archive INTEGER DEFAULT 0")
 
-    # Table Users
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
