@@ -49,10 +49,11 @@ st.markdown(
 )
 
 
-# 3. Database Setup (SQLite)
+# 3. Database Setup & Automatic Migration
 def init_db():
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
+
     # Table Titres
     c.execute(
         """
@@ -71,6 +72,18 @@ def init_db():
         )
     """
     )
+
+    # Automatic Migration: Check for missing columns in existing database
+    c.execute("PRAGMA table_info(titres)")
+    columns = [column[1] for column in c.fetchall()]
+
+    if "societe" not in columns:
+        c.execute("ALTER TABLE titres ADD COLUMN societe TEXT DEFAULT 'Ma Société'")
+    if "rib" not in columns:
+        c.execute("ALTER TABLE titres ADD COLUMN rib TEXT DEFAULT '-'")
+    if "archive" not in columns:
+        c.execute("ALTER TABLE titres ADD COLUMN archive INTEGER DEFAULT 0")
+
     # Table Users
     c.execute(
         """
@@ -80,6 +93,7 @@ def init_db():
         )
     """
     )
+
     # Default users creation
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
@@ -111,7 +125,9 @@ def load_data(include_archived=False):
     return df
 
 
-def insert_data(societe, titre_type, ref, client, bank, rib, amount, due_date, status):
+def insert_data(
+    societe, titre_type, ref, client, bank, rib, amount, due_date, status
+):
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
     c.execute(
@@ -119,7 +135,17 @@ def insert_data(societe, titre_type, ref, client, bank, rib, amount, due_date, s
         INSERT INTO titres (societe, type, reference, client, banque, rib, montant, echeance, statut, archive)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     """,
-        (societe, titre_type, ref, client, bank, rib, amount, str(due_date), status),
+        (
+            societe,
+            titre_type,
+            ref,
+            client,
+            bank,
+            rib,
+            amount,
+            str(due_date),
+            status,
+        ),
     )
     conn.commit()
     conn.close()
@@ -128,7 +154,9 @@ def insert_data(societe, titre_type, ref, client, bank, rib, amount, due_date, s
 def update_status(item_id, new_status):
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
-    c.execute("UPDATE titres SET statut = ? WHERE id = ?", (new_status, item_id))
+    c.execute(
+        "UPDATE titres SET statut = ? WHERE id = ?", (new_status, item_id)
+    )
     conn.commit()
     conn.close()
 
@@ -144,7 +172,10 @@ def archive_item(item_id):
 def check_user(username, password):
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+    c.execute(
+        "SELECT * FROM users WHERE username = ? AND password = ?",
+        (username, password),
+    )
     user = c.fetchone()
     conn.close()
     return user is not None
@@ -153,7 +184,10 @@ def check_user(username, password):
 def change_password(username, new_password):
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
-    c.execute("UPDATE users SET password = ? WHERE username = ?", (new_password, username))
+    c.execute(
+        "UPDATE users SET password = ? WHERE username = ?",
+        (new_password, username),
+    )
     conn.commit()
     conn.close()
 
@@ -164,13 +198,18 @@ if "authenticated" not in st.session_state:
     st.session_state["current_user"] = ""
 
 if not st.session_state["authenticated"]:
-    st.markdown("<h2 style='text-align: center;'>🔒 Connexion / Login</h2>", unsafe_allow_html=True)
+    st.markdown(
+        "<h2 style='text-align: center;'>🔒 Connexion / Login</h2>",
+        unsafe_allow_html=True,
+    )
     _, col_login, _ = st.columns([1, 1.5, 1])
     with col_login:
         with st.form("login_form"):
             username = st.text_input("Nom d'utilisateur / Username")
             password = st.text_input("Mot de passe / Password", type="password")
-            submit_login = st.form_submit_button("Se connecter / Log In", use_container_width=True)
+            submit_login = st.form_submit_button(
+                "Se connecter / Log In", use_container_width=True
+            )
             if submit_login:
                 if check_user(username, password):
                     st.session_state["authenticated"] = True
@@ -256,7 +295,9 @@ TEXTS = {
 
 # Sidebar Navigation
 st.sidebar.title("⚙️ Navigation")
-st.sidebar.write(f"👤 Connecté en tant que: **{st.session_state['current_user']}**")
+st.sidebar.write(
+    f"👤 Connecté en tant que: **{st.session_state['current_user']}**"
+)
 lang = st.sidebar.selectbox("🌐 Language / Langue", ["Français", "English"])
 t = TEXTS[lang]
 
@@ -298,10 +339,20 @@ if menu == t["menu_dash"]:
     st.subheader(t["menu_dash"])
 
     c1, c2, c3, c4 = st.columns(4)
-    v_portefeuille = df[df["statut"] == "En portefeuille"]["montant"].sum() if not df.empty else 0
-    v_remis = df[df["statut"] == "Remis à la banque"]["montant"].sum() if not df.empty else 0
+    v_portefeuille = (
+        df[df["statut"] == "En portefeuille"]["montant"].sum()
+        if not df.empty
+        else 0
+    )
+    v_remis = (
+        df[df["statut"] == "Remis à la banque"]["montant"].sum()
+        if not df.empty
+        else 0
+    )
     v_paye = df[df["statut"] == "Payé"]["montant"].sum() if not df.empty else 0
-    v_impaye = df[df["statut"] == "Impayé"]["montant"].sum() if not df.empty else 0
+    v_impaye = (
+        df[df["statut"] == "Impayé"]["montant"].sum() if not df.empty else 0
+    )
 
     c1.metric(t["total_portefeuille"], f"{v_portefeuille:,.2f} DH")
     c2.metric(t["total_remis"], f"{v_remis:,.2f} DH")
@@ -325,9 +376,21 @@ if menu == t["menu_dash"]:
         if upcoming.empty:
             st.info("Aucune échéance dans les 7 prochains jours.")
         else:
-            st.warning(f"{len(upcoming)} titre(s) en portefeuille arrivent à échéance sous peu:")
+            st.warning(
+                f"{len(upcoming)} titre(s) en portefeuille arrivent à échéance sous peu:"
+            )
             st.dataframe(
-                upcoming[["id", "societe", "type", "reference", "client", "montant", "echeance"]],
+                upcoming[
+                    [
+                        "id",
+                        "societe",
+                        "type",
+                        "reference",
+                        "client",
+                        "montant",
+                        "echeance",
+                    ]
+                ],
                 use_container_width=True,
             )
     else:
@@ -344,7 +407,9 @@ elif menu == t["menu_saisie"]:
             col1, col2 = st.columns(2)
             with col1:
                 societe = st.text_input(t["societe"], value="Ma Société")
-                titre_type = st.selectbox(t["type"], ["Chèque", "Effet", "Versement"])
+                titre_type = st.selectbox(
+                    t["type"], ["Chèque", "Effet", "Versement"]
+                )
                 ref = st.text_input(t["ref"])
                 client = st.text_input(t["client"])
             with col2:
@@ -362,7 +427,9 @@ elif menu == t["menu_saisie"]:
                     ],
                 )
                 rib = st.text_input(t["rib"])
-                amount = st.number_input(t["amount"], min_value=0.0, step=100.0, format="%.2f")
+                amount = st.number_input(
+                    t["amount"], min_value=0.0, step=100.0, format="%.2f"
+                )
                 due_date = st.date_input(t["due_date"], datetime.date.today())
                 status = st.selectbox(
                     t["status"],
@@ -370,7 +437,17 @@ elif menu == t["menu_saisie"]:
                 )
 
             if st.form_submit_button(t["save_btn"], use_container_width=True):
-                insert_data(societe, titre_type, ref, client, bank, rib, amount, due_date, status)
+                insert_data(
+                    societe,
+                    titre_type,
+                    ref,
+                    client,
+                    bank,
+                    rib,
+                    amount,
+                    due_date,
+                    status,
+                )
                 st.success("Enregistré avec succès!")
                 st.rerun()
 
@@ -391,8 +468,12 @@ elif menu == t["menu_saisie"]:
         filtered_df = df.copy()
         if search_query:
             filtered_df = filtered_df[
-                filtered_df["reference"].str.contains(search_query, case=False, na=False)
-                | filtered_df["client"].str.contains(search_query, case=False, na=False)
+                filtered_df["reference"].str.contains(
+                    search_query, case=False, na=False
+                )
+                | filtered_df["client"].str.contains(
+                    search_query, case=False, na=False
+                )
             ]
         if selected_bank != t["all"]:
             filtered_df = filtered_df[filtered_df["banque"] == selected_bank]
@@ -404,7 +485,9 @@ elif menu == t["menu_saisie"]:
         st.markdown("##### ✏️ Actions sur un titre (Statut / Archiver)")
         col_id, col_new_st, col_act1, col_act2 = st.columns([1, 2, 1, 1])
         with col_id:
-            target_id = st.number_input("ID du titre", min_value=1, step=1, value=1)
+            target_id = st.number_input(
+                "ID du titre", min_value=1, step=1, value=1
+            )
         with col_new_st:
             new_st = st.selectbox(
                 "Nouveau Statut",
@@ -429,7 +512,7 @@ elif menu == t["menu_saisie"]:
         st.info(t["no_data"])
 
 # ----------------------------------------------------
-# 3. Bordereau de Remise (PDF & Excel avec RIB/Société)
+# 3. Bordereau de Remise (PDF & Excel)
 # ----------------------------------------------------
 elif menu == t["menu_remise"]:
     st.subheader(t["menu_remise"])
@@ -447,14 +530,18 @@ elif menu == t["menu_remise"]:
                 selected_ids.append(row["id"])
 
         if selected_ids:
-            remise_df = df_portefeuille[df_portefeuille["id"].isin(selected_ids)]
+            remise_df = df_portefeuille[
+                df_portefeuille["id"].isin(selected_ids)
+            ]
             st.dataframe(remise_df, use_container_width=True)
 
             col1, col2 = st.columns(2)
             with col1:
                 buffer_excel = io.BytesIO()
                 with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
-                    remise_df.to_excel(writer, index=False, sheet_name="Bordereau")
+                    remise_df.to_excel(
+                        writer, index=False, sheet_name="Bordereau"
+                    )
                 st.download_button(
                     label=f"📥 {t['export_excel']}",
                     data=buffer_excel.getvalue(),
@@ -478,7 +565,8 @@ elif menu == t["menu_remise"]:
 
                     elements.append(
                         Paragraph(
-                            f"<b>BORDEREAU DE REMISE DE CHEQUES / EFFETS</b>", styles["Title"]
+                            "<b>BORDEREAU DE REMISE DE CHEQUES / EFFETS</b>",
+                            styles["Title"],
                         )
                     )
                     elements.append(Spacer(1, 10))
@@ -491,7 +579,13 @@ elif menu == t["menu_remise"]:
                     elements.append(Spacer(1, 15))
 
                     table_data = [
-                        ["Type", "Référence", "Client", "Montant (DH)", "Échéance"]
+                        [
+                            "Type",
+                            "Référence",
+                            "Client",
+                            "Montant (DH)",
+                            "Échéance",
+                        ]
                     ]
                     total = 0
                     for _, r in data.iterrows():
@@ -511,8 +605,18 @@ elif menu == t["menu_remise"]:
                     pdf_table.setStyle(
                         TableStyle(
                             [
-                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3d59")),
-                                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                                (
+                                    "BACKGROUND",
+                                    (0, 0),
+                                    (-1, 0),
+                                    colors.HexColor("#1e3d59"),
+                                ),
+                                (
+                                    "TEXTCOLOR",
+                                    (0, 0),
+                                    (-1, 0),
+                                    colors.whitesmoke,
+                                ),
                                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                                 ("GRID", (0, 0), (-1, -1), 1, colors.grey),
                             ]
@@ -542,7 +646,10 @@ elif menu == t["menu_impayes"]:
     else:
         st.error(f"Attention: {len(df_impayes)} titre(s) marqué(s) Impayé.")
         st.dataframe(df_impayes, use_container_width=True)
-        st.metric("Total Impayés (DH)", value=f"{df_impayes['montant'].sum():,.2f} DH")
+        st.metric(
+            "Total Impayés (DH)",
+            value=f"{df_impayes['montant'].sum():,.2f} DH",
+        )
 
 # ----------------------------------------------------
 # 5. Archives
