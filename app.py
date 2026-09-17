@@ -1,4 +1,3 @@
-
 import datetime
 import io
 import sqlite3
@@ -17,27 +16,33 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 2. Custom CSS (إخفاء الشريط العلوي وزر Gérer l'application)
+# 2. Custom CSS (تم تحديثه لإخفاء زر Gérer l'application نهائياً)
 st.markdown(
     """
 <style>
-    /* Hide Streamlit Header (Share, GitHub, Star, Settings) */
+    /* Hide Streamlit Header & Toolbar */
     header[data-testid="stHeader"] {
-        visibility: hidden;
-        height: 0%;
+        display: none !important;
+        visibility: hidden !important;
     }
     
-    /* Hide Streamlit Toolbar & Main Menu */
-    #MainMenu {visibility: hidden;}
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
     
-    /* Hide Manage App Button in the bottom right corner */
+    /* Hide Manage App / Gérer l'application Button and Status Elements */
     div[data-testid="stStatusWidget"] {
-        visibility: hidden;
+        display: none !important;
+        visibility: hidden !important;
     }
     .stAppToolbar {
-        display: none;
+        display: none !important;
     }
-    footer {visibility: hidden;}
+    [data-testid="stAppViewBlockContainer"] > div:nth-child(1) {
+        padding-top: 0rem;
+    }
+    button[title="Manage app"] {
+        display: none !important;
+    }
     
     /* Existing Styles */
     .main { background-color: #f8f9fa; }
@@ -540,11 +545,10 @@ elif menu == t["menu_remise"]:
     if df.empty:
         st.info("Aucun titre disponible dans la base de données.")
     else:
-        # Filter status selection to easily find any title
         status_filter = st.selectbox(
             "Filtrer par Statut / Filter by Status",
             ["Tous / All", "En portefeuille", "Remis à la banque", "Payé"],
-            index=1,  # Default to En portefeuille
+            index=1,
         )
 
         if status_filter != "Tous / All":
