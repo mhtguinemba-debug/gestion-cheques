@@ -16,10 +16,29 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 2. Custom CSS
+# 2. Custom CSS (تم تعديله لإخفاء الشريط العلوي وزر Gérer l'application)
 st.markdown(
     """
 <style>
+    /* Hide Streamlit Header (Share, GitHub, Star, Settings) */
+    header[data-testid="stHeader"] {
+        visibility: hidden;
+        height: 0%;
+    }
+    
+    /* Hide Streamlit Toolbar & Main Menu */
+    #MainMenu {visibility: hidden;}
+    
+    /* Hide Manage App Button in the bottom right corner */
+    div[data-testid="stStatusWidget"] {
+        visibility: hidden;
+    }
+    .stAppToolbar {
+        display: none;
+    }
+    footer {visibility: hidden;}
+    
+    /* Existing Styles */
     .main { background-color: #f8f9fa; }
     div[data-testid="stMetric"] {
         background-color: #ffffff;
