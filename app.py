@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 import sqlite3
 import pandas as pd
 from reportlab.lib import colors
@@ -20,11 +21,11 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    /* Absolute Hide for Header, Toolbar, Footer, Status Widgets */
     header[data-testid="stHeader"],
     footer,
     #MainMenu,
     .stAppToolbar,
+    [data-testid="stAppToolbar"],
     div[data-testid="stStatusWidget"],
     button[title="Manage app"],
     div[data-testid="stActionButton"] {
@@ -36,7 +37,7 @@ st.markdown(
     }
 
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 1rem !important;
     }
 
     .main { background-color: #f8f9fa; }
@@ -176,12 +177,96 @@ def update_status(item_id, new_status):
     conn.close()
 
 
-def archive_item(item_id):
+# دالة الأرشفة وإنشاء ملفات PDF و TXT
+def archive_item_with_files(item_id):
     conn = sqlite3.connect("data_gestion.db")
     c = conn.cursor()
+    c.execute("SELECT * FROM titres WHERE id = ?", (item_id,))
+    item = c.fetchone()
+
+    if not item:
+        conn.close()
+        return False, "ID non trouvé"
+
+    # تحديث الحالة فـ قاعدة البيانات
     c.execute("UPDATE titres SET archive = 1 WHERE id = ?", (item_id,))
     conn.commit()
     conn.close()
+
+    # إنشاء مجلد الأرشيف محلياً
+    os.makedirs("archives_exports", exist_ok=True)
+
+    # 1. إنشاء ملف TXT
+    txt_filename = f"archives_exports/archive_titre_{item_id}.txt"
+    txt_content = f"""========================================
+FICHE D'ARCHIVE TITRE N° {item_id}
+========================================
+Date d'archivage : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Société          : {item[1]}
+Type de Titre    : {item[2]}
+Référence        : {item[3]}
+Client           : {item[4]}
+Banque           : {item[5]}
+RIB              : {item[6]}
+Montant          : {item[7]:,.2f} DH
+Échéance         : {item[8]}
+Statut Final     : {item[9]}
+========================================
+"""
+    with open(txt_filename, "w", encoding="utf-8") as f:
+        f.write(txt_content)
+
+    # 2. إنشاء ملف PDF
+    pdf_filename = f"archives_exports/archive_titre_{item_id}.pdf"
+    doc = SimpleDocTemplate(pdf_filename, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(
+        Paragraph(
+            f"<b>DOCUMENT D'ARCHIVE - TITRE N° {item_id}</b>", styles["Title"]
+        )
+    )
+    elements.append(Spacer(1, 15))
+
+    details = [
+        ["Champ", "Valeur"],
+        ["Société", str(item[1])],
+        ["Type de Titre", str(item[2])],
+        ["Référence / N° Chèque", str(item[3])],
+        ["Client", str(item[4])],
+        ["Banque", str(item[5])],
+        ["RIB", str(item[6])],
+        ["Montant", f"{item[7]:,.2f} DH"],
+        ["Échéance", str(item[8])],
+        ["Statut", str(item[9])],
+        [
+            "Date d'archivage",
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        ],
+    ]
+
+    t = Table(details, colWidths=[150, 300])
+    t.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#1e293b"),
+                ),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+                ("PADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    elements.append(t)
+    doc.build(elements)
+
+    return True, txt_content
 
 
 def check_user(username, password):
@@ -207,7 +292,7 @@ def change_password(username, new_password):
     conn.close()
 
 
-# 4. Authentication Check
+# 4. Authentification
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
     st.session_state["current_user"] = ""
@@ -259,7 +344,7 @@ TEXTS = {
         "status": "Statut",
         "save_btn": "Enregistrer le Titre",
         "update_btn": "Mettre à jour",
-        "archive_btn": "Archiver",
+        "archive_btn": "Archiver & Exporter (PDF/TXT)",
         "search_label": "Rechercher (Référence ou Client)",
         "filter_bank": "Filtrer par Banque",
         "filter_status": "Filtrer par Statut",
@@ -270,40 +355,6 @@ TEXTS = {
         "change_pwd": "Changer le mot de passe",
         "no_data": "Aucune donnée disponible.",
     },
-    "English": {
-        "title": "📊 Check & Bill Management Platform",
-        "menu_dash": "Dashboard",
-        "menu_saisie": "Data Entry & Edit",
-        "menu_remise": "Remittance Slip",
-        "menu_impayes": "Unpaid Tracking",
-        "menu_archive": "Archives",
-        "total_portefeuille": "Portfolio Total",
-        "total_remis": "Deposited Total",
-        "total_paye": "Paid Total",
-        "total_impaye": "Unpaid Total",
-        "alerts_title": "⚠️ Upcoming Due Dates (Next 7 days)",
-        "societe": "Company Name",
-        "type": "Instrument Type",
-        "ref": "Reference / Check N°",
-        "client": "Client / Issuer",
-        "bank": "Bank",
-        "rib": "RIB N° (24 digits)",
-        "amount": "Amount (DH)",
-        "due_date": "Due Date",
-        "status": "Status",
-        "save_btn": "Save Record",
-        "update_btn": "Update",
-        "archive_btn": "Archive",
-        "search_label": "Search (Reference or Client)",
-        "filter_bank": "Filter by Bank",
-        "filter_status": "Filter by Status",
-        "all": "All",
-        "export_excel": "Export Excel",
-        "export_pdf": "Generate PDF Remittance",
-        "logout": "Log Out",
-        "change_pwd": "Change Password",
-        "no_data": "No data available.",
-    },
 }
 
 # Sidebar Navigation
@@ -311,8 +362,7 @@ st.sidebar.title("⚙️ Navigation")
 st.sidebar.write(
     f"👤 Connecté en tant que: **{st.session_state['current_user']}**"
 )
-lang = st.sidebar.selectbox("🌐 Language / Langue", ["Français", "English"])
-t = TEXTS[lang]
+t = TEXTS["Français"]
 
 menu = st.sidebar.radio(
     "Menu",
@@ -344,7 +394,7 @@ st.markdown("---")
 
 df = load_data()
 
-# 1. Dashboard
+# Dashboard
 if menu == t["menu_dash"]:
     st.subheader(t["menu_dash"])
 
@@ -406,7 +456,7 @@ if menu == t["menu_dash"]:
     else:
         st.info(t["no_data"])
 
-# 2. Saisie & Modification
+# Saisie & Modification
 elif menu == t["menu_saisie"]:
     st.subheader(t["menu_saisie"])
 
@@ -490,7 +540,9 @@ elif menu == t["menu_saisie"]:
 
         st.dataframe(filtered_df, use_container_width=True)
 
-        st.markdown("##### ✏️ Actions sur un titre (Statut / Archiver)")
+        st.markdown(
+            "##### ✏️ Actions sur un titre (Changer Statut / Archiver)"
+        )
         col_id, col_new_st, col_act1, col_act2 = st.columns([1, 2, 1, 1])
         with col_id:
             target_id = st.number_input(
@@ -513,13 +565,18 @@ elif menu == t["menu_saisie"]:
             st.write("")
             st.write("")
             if st.button(f"📦 {t['archive_btn']}", use_container_width=True):
-                archive_item(target_id)
-                st.success(f"Titre ID {target_id} archivé !")
-                st.rerun()
+                success, _ = archive_item_with_files(target_id)
+                if success:
+                    st.success(
+                        f"Titre ID {target_id} archivé et exporté en PDF & TXT !"
+                    )
+                    st.rerun()
+                else:
+                    st.error("Titre introuvable.")
     else:
         st.info(t["no_data"])
 
-# 3. Bordereau de Remise
+# Bordereau de Remise
 elif menu == t["menu_remise"]:
     st.subheader(t["menu_remise"])
 
@@ -527,7 +584,7 @@ elif menu == t["menu_remise"]:
         st.info("Aucun titre disponible dans la base de données.")
     else:
         status_filter = st.selectbox(
-            "Filtrer par Statut / Filter by Status",
+            "Filtrer par Statut",
             ["Tous / All", "En portefeuille", "Remis à la banque", "Payé"],
             index=1,
         )
@@ -658,13 +715,13 @@ elif menu == t["menu_remise"]:
                         use_container_width=True,
                     )
 
-# 4. Suivi des Impayés
+# Suivi des Impayés
 elif menu == t["menu_impayes"]:
     st.subheader(t["menu_impayes"])
     df_impayes = df[df["statut"] == "Impayé"]
 
     if df_impayes.empty:
-        st.success("Aucun titre impayé enregistré / No unpaid instruments.")
+        st.success("Aucun titre impayé enregistré.")
     else:
         st.error(f"Attention: {len(df_impayes)} titre(s) marqué(s) Impayé.")
         st.dataframe(df_impayes, use_container_width=True)
@@ -673,7 +730,7 @@ elif menu == t["menu_impayes"]:
             value=f"{df_impayes['montant'].sum():,.2f} DH",
         )
 
-# 5. Archives
+# Archives
 elif menu == t["menu_archive"]:
     st.subheader(t["menu_archive"])
     df_archived = load_data(include_archived=True)
@@ -683,3 +740,37 @@ elif menu == t["menu_archive"]:
         st.info("Aucune donnée archivée.")
     else:
         st.dataframe(df_archived, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("📥 Télécharger les fichiers d'archive générés")
+
+        for _, row in df_archived.iterrows():
+            item_id = row["id"]
+            pdf_path = f"archives_exports/archive_titre_{item_id}.pdf"
+            txt_path = f"archives_exports/archive_titre_{item_id}.txt"
+
+            col_a1, col_a2, col_a3 = st.columns([2, 1, 1])
+            with col_a1:
+                st.write(
+                    f"**Titre ID {item_id}:** {row['type']} N° {row['reference']} - {row['client']} ({row['montant']} DH)"
+                )
+            with col_a2:
+                if os.path.exists(pdf_path):
+                    with open(pdf_path, "rb") as pdf_file:
+                        st.download_button(
+                            label=f"📄 PDF ({item_id})",
+                            data=pdf_file,
+                            file_name=f"archive_titre_{item_id}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_pdf_{item_id}",
+                        )
+            with col_a3:
+                if os.path.exists(txt_path):
+                    with open(txt_path, "rb") as txt_file:
+                        st.download_button(
+                            label=f"📝 TXT ({item_id})",
+                            data=txt_file,
+                            file_name=f"archive_titre_{item_id}.txt",
+                            mime="text/plain",
+                            key=f"dl_txt_{item_id}",
+                        )
